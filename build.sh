@@ -89,6 +89,9 @@ d nmake -f ms/ntdll.mak
 d nmake -f ms/ntdll.mak test
 d nmake -f ms/ntdll.mak install
 
+# So the zip file goes in the current directory
+d cd -
+
 back=$(pwd | sed -e 's,^/c,,' -e 's,/,\\,g')
 prog7z="/c/Program Files/7-Zip/7z.exe"
 
