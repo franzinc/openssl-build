@@ -1,3 +1,5 @@
 /openssl-*.32/
 /openssl-*.64/
 /*.tar.gz
+/*.zip
+/acl/
