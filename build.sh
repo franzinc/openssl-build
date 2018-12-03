@@ -1,31 +1,41 @@
-#! /bin/bash
+#! /usr/bin/env bash
+# Build OpenSSL for Windows, for use by ACL.
 
 set -eu
 
-usage()
-{
-    if test -n "${*-}"; then
+function usage {
+    if [ "${*-}" ]; then
 	echo "Error: $*" 1>&2
     fi
     cat 1>&2 <<EOF
-Usage: $0 { -3 | -6 } version
+Usage: $0 { -32 | -64 } version
 
 Example:
 # Build the 32-bit OpenSSL 1.0.1h zip:
-  \$ $0 -3 1.0.1h
+  \$ $0 -32 1.0.1h
 # Build the 64-bit OpenSSL 1.0.1h zip:
-  \$ $0 -6 1.0.1h
+  \$ $0 -64 1.0.1h
 EOF
     exit 1
 }
 
-errordie()
-{
-    if test -n "${*-}"; then
+function errordie {
+    if [ "${*-}" ]; then
 	echo "Error: $*" 1>&2
+    else
+	echo "Error" 1>&2
     fi
     exit 1
 }
+
+if [ ! -d acl ]; then
+    git clone git:/repo/git/acl
+fi
+subs=acl/bin/subswin.sh
+[ -f "$subs" ] || errordie cannot find $subs
+source $subs
+
+rootdir=$(pwd)
 
 debug=
 ver=
@@ -34,8 +44,8 @@ bit=
 while test $# -gt 0; do
     case $1 in
 	--debug) debug=$1 ;;
-	-3) bit=32 ;;
-	-6) bit=64 ;;
+	-3*) bit=32 ;;
+	-6*) bit=64 ;;
 	-*) usage ;;
 	*)  ver=$1
 	    break
@@ -44,20 +54,18 @@ while test $# -gt 0; do
     shift
 done
 
-d()
-{
+function d {
     echo "+ $*"
     if test -z "$debug"; then
 	"$@"
     fi
 }
 
-[ -z "$bit" ] && usage did not specify -3 od -6
-[ -z "$ver" ] && usage did not specify version
+[ "$bit" ] || usage did not specify -3 od -6
+[ "$ver" ] || usage did not specify version
 
 src=openssl-${ver}.tar.gz
-
-[ ! -f "$src" ] && usage $src does not exist
+[ -f "$src" ] || usage $src does not exist
 
 outdir=openssl-${ver}.${bit}
 zipout=openssl-${ver}-${bit}.zip
@@ -65,36 +73,59 @@ zipout=openssl-${ver}-${bit}.zip
 d rm -fr "openssl-${ver}"
 d rm -fr "$outdir"
 d rm -f "$zipout"
-d rm -fr "/c/$outdir"
+d adoitw rm -fr "/c/$outdir"
 
 d tar zxf openssl-${ver}.tar.gz
 d mv openssl-${ver} "$outdir"
 
-d cd "$outdir"
-
 aclbuildenv=${bit}bit
-. /c/src/scm/acl82.${bit}/src/cl/src/bin/windows_.env
 
 if [ "$bit" = "32" ]; then
-    export PATH=/c/perl/bin:$PATH
-    d perl Configure VC-WIN32 no-asm --prefix=c:/$outdir
-    d ms/do_nasm.bat
+    cd /c/src/scm/acl10.1.32/src/cl/src/
 else
-    export PATH=/c/perl/bin:/c/nasm:$PATH
-    d perl Configure VC-WIN64A --prefix=c:/$outdir
-    d ms/do_win64a.bat
+    cd /c/src/scm/acl10.1.64/src/cl/src/
+fi
+source env.sh
+cd $rootdir
+
+d cd "$outdir"
+
+export PATH=/c/perl64/bin:$PATH
+
+if [ "$bit" = "32" ]; then
+    d perl Configure VC-WIN32 no-asm --prefix=c:/$outdir
+    if [[ $ver =~ ^1\.0 ]]; then
+	d ms/do_nasm.bat
+    fi
+else
+    if [[ $ver =~ ^1\.0 ]]; then
+	d perl Configure VC-WIN64A --prefix=c:/$outdir
+	d ms/do_win64a.bat
+    else
+	d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
+    fi
 fi
 
-d nmake -f ms/ntdll.mak
-d nmake -f ms/ntdll.mak test
-d nmake -f ms/ntdll.mak install
+if [[ $ver =~ ^1\.0 ]]; then
+    margs="-f ms/ntdll.mak"
+else
+    margs=
+fi
+
+# A horrible hack.  Not that many people will use that version of link.exe.
+# Only builds with gcc inside of Cygwin would.  Still, it's horrible.
+[ -f /usr/bin/link.exe ] && d mv /usr/bin/link.exe /usr/bin/link.exe.save
+d nmake $margs
+d nmake $margs test
+d adoitw nmake $margs install
+# undo the horrible hack
+[ -f /usr/bin/link.exe.save ] && d mv /usr/bin/link.exe.save /usr/bin/link.exe 
 
 # So the zip file goes in the current directory
-d cd -
-
-back=$(pwd | sed -e 's,^/c,,' -e 's,/,\\,g')
+d cd "$rootdir"
+fromdir=$(pwd | sed -e 's,^/c,,' -e 's,/,\\,g')
 prog7z="/c/Program Files/7-Zip/7z.exe"
 
 d cd /c
 
-d "$prog7z" u '-wc:\tmp' -tzip -r "$back\\$zipout" "${outdir}\\*.*"
+d "$prog7z" u '-wc:\tmp' -tzip -r "$fromdir\\$zipout" "${outdir}\\*.*"
