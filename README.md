@@ -4,6 +4,10 @@
 
 * Microsoft Visual Studio 2015 was used for the build.
 * Cygwin `make`, `bash` and various other tools
+* `NASM` is needed for the build.  The included installer (version
+  2.11.05) was downloaded from https://www.nasm.us/ and this snapshot
+  is here for convenience.  We recommend you get the latest version
+  from them.
 
 ## Building
 
