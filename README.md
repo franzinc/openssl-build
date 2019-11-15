@@ -23,4 +23,4 @@ produce two files `openssl-1.1.1d-32.zip` and `openssl-1.1.1d-64.zip`.
 ## License
 
 The files in this repo are in the public domain, except for the `NASM`
-executable, which is has a separate license.
+executable, which has a separate license.
