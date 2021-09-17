@@ -112,14 +112,17 @@ else
     margs=
 fi
 
+{
 # A horrible hack.  Not that many people will use that version of link.exe.
 # Only builds with gcc inside of Cygwin would.  Still, it's horrible.
-[ -f /usr/bin/link.exe ] && d mv /usr/bin/link.exe /usr/bin/link.exe.save
+[ -f /usr/bin/link.exe ] &&
+    d adoitw mv /usr/bin/link.exe /usr/bin/link.exe.save
 d nmake $margs
 d nmake $margs test
 d adoitw nmake $margs install
 # undo the horrible hack
-[ -f /usr/bin/link.exe.save ] && d mv /usr/bin/link.exe.save /usr/bin/link.exe 
+[ -f /usr/bin/link.exe.save ] &&
+    d adoitw mv /usr/bin/link.exe.save /usr/bin/link.exe 
 
 # So the zip file goes in the current directory
 d cd "$rootdir"
@@ -129,3 +132,5 @@ prog7z="/c/Program Files/7-Zip/7z.exe"
 d cd /c
 
 d "$prog7z" u '-wc:\tmp' -tzip -r "$fromdir\\$zipout" "${outdir}\\*.*"
+exit 0
+}
