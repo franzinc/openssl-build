@@ -118,6 +118,8 @@ fi
 [ -f /usr/bin/link.exe ] &&
     d adoitw mv /usr/bin/link.exe /usr/bin/link.exe.save
 d nmake $margs
+d zipsign "$zipout" "signed/$zipout"
+d mv "$zipout" "unsigned/$zipout"
 d nmake $margs test
 d adoitw nmake $margs install
 # undo the horrible hack
@@ -131,6 +133,6 @@ prog7z="/c/Program Files/7-Zip/7z.exe"
 
 d cd /c
 
-d "$prog7z" u '-wc:\tmp' -tzip -r "$fromdir\\$zipout" "${outdir}\\*.*"
+d "$prog7z" u '-wc:\tmp' -tzip -r "$fromdir\\signed\\$zipout" "${outdir}\\*.*"
 exit 0
 }
