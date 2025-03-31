@@ -20,11 +20,7 @@ EOF
 }
 
 function errordie {
-    if [ "${*-}" ]; then
-	echo "Error: $*" 1>&2
-    else
-	echo "Error" 1>&2
-    fi
+    echo "Error: $*" 1>&2
     exit 1
 }
 
@@ -32,20 +28,24 @@ if [ ! -d acl ]; then
     git clone git:/repo/git/acl
 fi
 subs=acl/bin/subswin.sh
-[ -f "$subs" ] || errordie cannot find $subs
+[ -f "$subs" ] || errordie "cannot find $subs"
 source $subs
 
-rootdir=$(pwd)
+origdir=$(pwd)
 
 debug=
 ver=
 bit=
+remove=
+dotest=
 
 while test $# -gt 0; do
     case $1 in
 	--debug) debug=$1 ;;
-	-3*) bit=32 ;;
-	-6*) bit=64 ;;
+        --build) remove=$1 ;;
+        --test) dotest=$1 ;;
+	-32|--32) bit=32 ;;
+	-64|--64) bit=64 ;;
 	-*) usage ;;
 	*)  ver=$1
 	    break
@@ -54,30 +54,46 @@ while test $# -gt 0; do
     shift
 done
 
-function d {
-    echo "+ $*"
-    if test -z "$debug"; then
-	"$@"
-    fi
-}
-
 [ "$bit" ] || usage did not specify -3 od -6
 [ "$ver" ] || usage did not specify version
 
 src=openssl-${ver}.tar.gz
 [ -f "$src" ] || usage $src does not exist
 
+function d {
+    echo "+ $*"
+    if [ -z "$debug" ]; then
+	"$@"
+    fi
+}
+
+# usage: zipit source-directory output-zip-file
+function zipit {
+    rm -f "$2"
+    $find "$1" -type f -print | $zip "$2" -@9
+}
+
+{
+
+zip=$(type -p zip)
+find=$(type -p find)
+
 outdir=openssl-${ver}.${bit}
-zipout=openssl-${ver}-${bit}.zip
+zipout=openssl-${ver}.${bit}.zip
 
 d rm -fr "openssl-${ver}"
-d rm -fr "$outdir"
-d rm -f "$zipout"
+if [ "$remove" ]; then
+    d rm -fr "$outdir"
+    d tar zxf openssl-${ver}.tar.gz
+    d mv openssl-${ver} "$outdir"
+elif [ ! -d "$outdir" ]; then
+    errordie "$outdir does not exist"
+fi
+
+d rm -f "signed/$zipout"
 d adoitw rm -fr "/c/$outdir"
 
-d tar zxf openssl-${ver}.tar.gz
-d mv openssl-${ver} "$outdir"
-
+# used by env.sh
 aclbuildenv=${bit}bit
 
 if [ "$bit" = "32" ]; then
@@ -86,53 +102,49 @@ else
     cd /c/src/scm/acl10.1.64/src/cl/src/
 fi
 source env.sh
-cd $rootdir
-
-d cd "$outdir"
 
 export PATH=/c/perl64/bin:$PATH
 
-if [ "$bit" = "32" ]; then
-    d perl Configure VC-WIN32 no-asm --prefix=c:/$outdir
-    if [[ $ver =~ ^1\.0 ]]; then
-	d ms/do_nasm.bat
-    fi
-else
-    if [[ $ver =~ ^1\.0 ]]; then
-	d perl Configure VC-WIN64A --prefix=c:/$outdir
-	d ms/do_win64a.bat
+d cd "$origdir/$outdir"
+
+if [ "$remove" ]; then
+    if [ "$bit" = "32" ]; then
+        d perl Configure VC-WIN32 no-asm --prefix=c:/$outdir
     else
-	d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
+        d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
     fi
 fi
 
-if [[ $ver =~ ^1\.0 ]]; then
-    margs="-f ms/ntdll.mak"
-else
-    margs=
+# We need /usr/bin/ to be at the end PATH so /usr/bin/link.exe is NOT
+# used by the build.
+PATH=$(echo $PATH | sed -e 's,:/bin:,:,g' -e 's,:/usr/bin:,:,g'):/bin:/usr/bin
+
+if ! d nmake; then
+    echo "build failed"
+    echo "command: nmake"
+    echo "directory: $(pwd)"
+    exit 1
 fi
 
-{
-# A horrible hack.  Not that many people will use that version of link.exe.
-# Only builds with gcc inside of Cygwin would.  Still, it's horrible.
-[ -f /usr/bin/link.exe ] &&
-    d adoitw mv /usr/bin/link.exe /usr/bin/link.exe.save
-d nmake $margs
-d zipsign "$zipout" "signed/$zipout"
-d mv "$zipout" "unsigned/$zipout"
-d nmake $margs test
-d adoitw nmake $margs install
-# undo the horrible hack
-[ -f /usr/bin/link.exe.save ] &&
-    d adoitw mv /usr/bin/link.exe.save /usr/bin/link.exe 
+[ "$dotest" ] && d nmake test
+d adoitw nmake install
 
-# So the zip file goes in the current directory
-d cd "$rootdir"
-fromdir=$(pwd | sed -e 's,^/c,,' -e 's,/,\\,g')
-prog7z="/c/Program Files/7-Zip/7z.exe"
+# The above builds and installs into c:/... now we need to make the zip file, so
+# we can sign the contents of it.  NOTE: we can't sign in place, in c:/...
+# because Administrator owns those files.  Sad face.
 
-d cd /c
+cd "$origdir"
 
-d "$prog7z" u '-wc:\tmp' -tzip -r "$fromdir\\signed\\$zipout" "${outdir}\\*.*"
+d rm -fr "tmp/$outdir"
+d cp -rp "/c/$outdir" "tmp/$outdir"
+
+export FI_CODESIGN_FOR_RELEASE=yes
+for bin in $($find "tmp/$outdir" '(' -name '*.exe' -o -name '*.dll' ')' -print); do
+    d ficodesign  "$(cygpath -w "$bin")"
+done
+
+d cd tmp
+d zipit "$outdir" "$origdir/signed/$zipout"
+
 exit 0
 }
