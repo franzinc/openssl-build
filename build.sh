@@ -111,6 +111,8 @@ if [ "$remove" ]; then
     if [ "$bit" = "32" ]; then
         d perl Configure VC-WIN32 no-asm --prefix=c:/$outdir
     else
+        # d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
+        export CC='C:/PROGRA~1/LLVM/bin/clang-cl.exe'
         d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
     fi
 fi
