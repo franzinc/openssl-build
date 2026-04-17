@@ -38,12 +38,14 @@ ver=
 bit=
 remove=
 dotest=
+keep=
 
 while test $# -gt 0; do
     case $1 in
-	--debug) debug=$1 ;;
-        --build) remove=$1 ;;
-        --test) dotest=$1 ;;
+	--debug)  debug=$1 ;;
+        --build)  remove=$1 ;;
+        --test)   dotest=$1 ;;
+        --keep)   keep=$1 ;;
 	-32|--32) bit=32 ;;
 	-64|--64) bit=64 ;;
 	-*) usage ;;
@@ -53,6 +55,8 @@ while test $# -gt 0; do
     esac
     shift
 done
+
+[ "$keep" ] && remove=
 
 [ "$bit" ] || usage did not specify -3 od -6
 [ "$ver" ] || usage did not specify version
@@ -107,12 +111,13 @@ export PATH=/c/perl64/bin:$PATH
 
 d cd "$origdir/$outdir"
 
+export CC='C:/PROGRA~1/LLVM/bin/clang-cl.exe'
+
 if [ "$remove" ]; then
     if [ "$bit" = "32" ]; then
-        d perl Configure VC-WIN32 no-asm --prefix=c:/$outdir
+        export CL='--target=i686-pc-windows-msvc'
+        d perl Configure VC-WIN32 no-asm no-uplink --prefix=c:/$outdir
     else
-        # d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
-        export CC='C:/PROGRA~1/LLVM/bin/clang-cl.exe'
         d perl Configure VC-WIN64A no-asm --prefix=c:/$outdir
     fi
 fi
@@ -120,6 +125,11 @@ fi
 # We need /usr/bin/ to be at the end PATH so /usr/bin/link.exe is NOT
 # used by the build.
 PATH=$(echo $PATH | sed -e 's,:/bin:,:,g' -e 's,:/usr/bin:,:,g'):/bin:/usr/bin
+
+echo "LIB=${LIB-}"
+echo "LIBPATH=${LIBPATH-}"
+which link.exe
+which cl.exe
 
 if ! d nmake; then
     echo "build failed"
